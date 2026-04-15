@@ -35,6 +35,11 @@ Workflow behavior:
 * `push` tag `v*`: build, upload an Actions artifact, and attach release assets
 * `workflow_dispatch`: build on demand
 
+Artifact naming:
+
+* branch/manual builds: `crashpad-sdk-linux-x86_64-<short-sha>.tar.gz`
+* tag builds/releases: `crashpad-sdk-linux-x86_64-<tag>.tar.gz`
+
 The packaged Linux SDK currently expects the consumer to link the additional
 system libraries `curl`, `z`, `dl`, and `pthread`.
 

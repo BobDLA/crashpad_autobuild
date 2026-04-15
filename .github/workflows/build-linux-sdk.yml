@@ -22,7 +22,7 @@ jobs:
       DEPOT_TOOLS_METRICS: "0"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -78,10 +78,16 @@ jobs:
         id: package
         env:
           SDK_OUTPUT_DIR: ${{ runner.temp }}/dist/${{ env.SDK_DIR_NAME }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
           SHORT_SHA="$(git -C "${RUNNER_TEMP}/crashpad-work/crashpad" rev-parse --short=12 HEAD)"
-          ARCHIVE_NAME="${SDK_DIR_NAME}-${SHORT_SHA}.tar.gz"
+          VERSION_LABEL="${SHORT_SHA}"
+          if [[ "${REF_TYPE}" == "tag" && -n "${REF_NAME}" ]]; then
+            VERSION_LABEL="${REF_NAME}"
+          fi
+          ARCHIVE_NAME="${SDK_DIR_NAME}-${VERSION_LABEL}.tar.gz"
           CHECKSUM_NAME="${ARCHIVE_NAME}.sha256"
           mkdir -p "${RUNNER_TEMP}/artifacts"
           tar -C "$(dirname "${SDK_OUTPUT_DIR}")" -czf "${RUNNER_TEMP}/artifacts/${ARCHIVE_NAME}" "$(basename "${SDK_OUTPUT_DIR}")"
@@ -97,7 +103,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.package.outputs.archive_name }}
           path: |
