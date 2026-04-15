@@ -18,6 +18,26 @@ limitations under the License.
 
 [Crashpad](https://crashpad.chromium.org/) is a crash-reporting system.
 
+## This Fork
+
+This fork is used to produce a Linux SDK artifact that can be consumed by other
+repositories.
+
+GitHub Actions builds a Linux x86_64 package with the layout below:
+
+* `include/`
+* `lib/`
+* `bin/crashpad_handler`
+
+Workflow behavior:
+
+* `push` to `main`: build and upload an Actions artifact
+* `push` tag `v*`: build, upload an Actions artifact, and attach release assets
+* `workflow_dispatch`: build on demand
+
+The packaged Linux SDK currently expects the consumer to link the additional
+system libraries `curl`, `z`, `dl`, and `pthread`.
+
 ## Documentation
 
  * [Project status](doc/status.md)

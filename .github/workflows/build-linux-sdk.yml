@@ -1,0 +1,113 @@
+name: build-linux-sdk
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-sdk:
+    runs-on: ubuntu-22.04
+    env:
+      BUILD_DIR: out/Release
+      SDK_DIR_NAME: crashpad-sdk-linux-x86_64
+      DEPOT_TOOLS_UPDATE: "0"
+      DEPOT_TOOLS_METRICS: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential \
+            git \
+            libcurl4-openssl-dev \
+            zlib1g-dev
+
+      - name: Install depot_tools
+        run: |
+          git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "${RUNNER_TEMP}/depot_tools"
+          echo "${RUNNER_TEMP}/depot_tools" >> "${GITHUB_PATH}"
+
+      - name: Create Crashpad workspace and sync dependencies
+        env:
+          FORK_URL: https://github.com/${{ github.repository }}.git
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/crashpad-work"
+          cd "${RUNNER_TEMP}/crashpad-work"
+          fetch --nohooks --no-history crashpad
+          cd crashpad
+          git remote add fork "${FORK_URL}"
+          git fetch --no-tags fork "${TARGET_SHA}"
+          git checkout --detach FETCH_HEAD
+          gclient sync --shallow --no-history
+
+      - name: Generate build files
+        working-directory: ${{ runner.temp }}/crashpad-work/crashpad
+        run: gn gen "${BUILD_DIR}" --args='is_debug=false'
+
+      - name: Build crashpad_handler and static libraries
+        working-directory: ${{ runner.temp }}/crashpad-work/crashpad
+        run: ninja -C "${BUILD_DIR}" crashpad_handler
+
+      - name: Package Linux SDK
+        env:
+          SDK_OUTPUT_DIR: ${{ runner.temp }}/dist/${{ env.SDK_DIR_NAME }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/package_linux_sdk.sh
+          ./scripts/package_linux_sdk.sh \
+            "${RUNNER_TEMP}/crashpad-work/crashpad" \
+            "${RUNNER_TEMP}/crashpad-work/crashpad/${BUILD_DIR}" \
+            "${SDK_OUTPUT_DIR}"
+
+      - name: Create archive and checksum
+        id: package
+        env:
+          SDK_OUTPUT_DIR: ${{ runner.temp }}/dist/${{ env.SDK_DIR_NAME }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(git -C "${RUNNER_TEMP}/crashpad-work/crashpad" rev-parse --short=12 HEAD)"
+          ARCHIVE_NAME="${SDK_DIR_NAME}-${SHORT_SHA}.tar.gz"
+          CHECKSUM_NAME="${ARCHIVE_NAME}.sha256"
+          mkdir -p "${RUNNER_TEMP}/artifacts"
+          tar -C "$(dirname "${SDK_OUTPUT_DIR}")" -czf "${RUNNER_TEMP}/artifacts/${ARCHIVE_NAME}" "$(basename "${SDK_OUTPUT_DIR}")"
+          (
+            cd "${RUNNER_TEMP}/artifacts"
+            sha256sum "${ARCHIVE_NAME}" > "${CHECKSUM_NAME}"
+          )
+          {
+            echo "archive_name=${ARCHIVE_NAME}"
+            echo "checksum_name=${CHECKSUM_NAME}"
+            echo "archive_path=${RUNNER_TEMP}/artifacts/${ARCHIVE_NAME}"
+            echo "checksum_path=${RUNNER_TEMP}/artifacts/${CHECKSUM_NAME}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.archive_name }}
+          path: |
+            ${{ steps.package.outputs.archive_path }}
+            ${{ steps.package.outputs.checksum_path }}
+
+      - name: Publish release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.package.outputs.archive_path }}
+            ${{ steps.package.outputs.checksum_path }}
