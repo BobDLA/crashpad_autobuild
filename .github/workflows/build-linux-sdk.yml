@@ -57,7 +57,7 @@ jobs:
 
       - name: Generate build files
         working-directory: ${{ runner.temp }}/crashpad-work/crashpad
-        run: ./buildtools/linux64/gn gen "${BUILD_DIR}" --args='is_debug=false'
+        run: ../buildtools/linux64/gn gen "${BUILD_DIR}" --args='is_debug=false'
 
       - name: Build crashpad_handler and static libraries
         working-directory: ${{ runner.temp }}/crashpad-work/crashpad
