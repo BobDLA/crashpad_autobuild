@@ -57,11 +57,11 @@ jobs:
 
       - name: Generate build files
         working-directory: ${{ runner.temp }}/crashpad-work/crashpad
-        run: gn gen "${BUILD_DIR}" --args='is_debug=false'
+        run: ./buildtools/linux64/gn gen "${BUILD_DIR}" --args='is_debug=false'
 
       - name: Build crashpad_handler and static libraries
         working-directory: ${{ runner.temp }}/crashpad-work/crashpad
-        run: ninja -C "${BUILD_DIR}" crashpad_handler
+        run: ./third_party/ninja/linux/ninja -C "${BUILD_DIR}" crashpad_handler
 
       - name: Package Linux SDK
         env:
